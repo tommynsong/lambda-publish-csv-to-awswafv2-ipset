@@ -1,0 +1,1 @@
+# Lambda handler to update AWS WAF v2 IPset from CSV in an S3 bucket.
