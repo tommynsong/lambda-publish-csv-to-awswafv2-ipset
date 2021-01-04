@@ -21,7 +21,7 @@ class AwsWafV2IpSetUpdateHandler():
         # All Environment variables should use SCREAMING_SNAKE_CASE
         self.ipset_name = str(os.environ['IPSET_NAME'])
         self.ipset_id = str(os.environ['IPSET_ID'])
-        self.ipset_scope = str(os.environ['IPSET_SCOPE'])
+        self.scope = str(os.environ['SCOPE'])
 
     def handle_request(self, event, context):
         """Converting CSV documents into IPSet list"""
@@ -31,32 +31,47 @@ class AwsWafV2IpSetUpdateHandler():
             event['Records'][0]['s3']['object']['key'], encoding='utf-8')
         obj = self.s3_client.get_object(Bucket=bucket, Key=key)
         temp = obj['Body'].read()
-        records = csv.DictReader(StringIO(temp), delimiter=',')
-        fields = ['ip', 'note']
+        temp2 = temp.decode('utf-8')
+        records = csv.DictReader(StringIO(temp2), delimiter=',')
         addresses = []
         for record in records:
-            if all(key in record for key in fields):
-                addresses = addresses.append(ipnet(record['ip']))
+            addresses.append(record['ipnet'])
+        
+        self.logger.info(f'These are the addresses {addresses}')
 
-        response = self.waf_client.get_ip_set(
-            Name = self.ipset_name,
-            Id = self.ipset_id,
-            Scope = self.ipset_scope
-        )
+        try:
+            get_lock_token = self.waf_client.get_ip_set(
+                Name = self.ipset_name,
+                Id = self.ipset_id,
+                Scope = self.scope
+            )
+            if 'LockToken' in get_lock_token:
+                ipset_lock_token = get_lock_token.get('LockToken')
+                self.logger.info(f'IPSet Lock Token {ipset_lock_token}')
+            else:
+                self.logger.error(f'Unable to get Lock Token')
+        finally:
+            pass
 
-        ipset_lock_token = response.get('LockToken')
-
-        response = self.waf_client.update_ip_set(
-            Name = self.ipset_name,
-            Scope = self.ipset_scope,
-            Id = self.ipset_id,
-            Addresses = addresses,
-            LockToken = ipset_lock_token
-        )
+        try:
+            request = self.waf_client.update_ip_set(
+                Name = self.ipset_name,
+                Scope = self.scope,
+                Id = self.ipset_id,
+                Addresses = addresses,
+                LockToken = ipset_lock_token
+            )
+            if 'NextLockToken' in request:
+                self.logger.info(f'Updated IPSet {self.ipset_id}')
+            else:
+                self.logger.error(f'Failed to update IPSet {self.ipset_id}')
+        finally:
+            pass
+            
 
 # Keep an instance to reuse for as long as the Lambda container lives.
 HANDLER = AwsWafV2IpSetUpdateHandler()
 
-def handle_request(event, context):
+def lambda_handler(event, context):
     """Entry point for the lambda. Invokes the handler."""
     return HANDLER.handle_request(event, context)
