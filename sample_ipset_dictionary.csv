@@ -1,0 +1,3 @@
+ipnet, note
+127.0.0.1/32, loopback
+192.168.0.0/16, rfc1918 class C
