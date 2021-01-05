@@ -33,6 +33,7 @@ class AwsWafV2IpSetUpdateHandler():
         temp2 = temp.decode('utf-8')
         records = csv.DictReader(StringIO(temp2), delimiter=',')
         addresses = []
+        ipset_lock_token = ''
         for record in records:
             addresses.append(record['ipnet'])
         
