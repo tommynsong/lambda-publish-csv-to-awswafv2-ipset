@@ -2,7 +2,6 @@
 import os
 import logging
 import urllib.parse
-from ipaddress import ip_network as ipnet
 from io import StringIO
 import csv
 import boto3
